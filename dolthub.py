@@ -27,7 +27,7 @@ class APIServerException(Exception):
     pass
 
 
-class Dolthub:
+class PRManager:
     def __init__(self, token: str = None, token_file: str = None, user_agent: str = "Alexis' Private API Client For Bounties"):
         """
             Required to setup the private api client.
@@ -184,9 +184,9 @@ class Dolthub:
 
 if __name__ == "__main__":
     try:
-        dolthub = Dolthub(token_file="token.txt")
-        results, status_code = dolthub.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=2, pr_title="Test PR Script", pr_state="Closed", pr_message="This is a test PR message!")
-        # results = dolthub.lookup_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=2)
+        manager = PRManager(token_file="token.txt")
+        results, status_code = manager.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=2, pr_title="Test PR Script", pr_state="Closed", pr_message="This is a test PR message!")
+        # results = manager.lookup_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=2)
 
         print(results)
     except NoAuthException as e:
