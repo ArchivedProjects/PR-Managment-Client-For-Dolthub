@@ -1,0 +1,9 @@
+{
+  "operationName": "PullDetailsForPullDetails",
+  "variables": {
+    "ownerName": "archived_projects",
+    "repoName": "test-forking-1",
+    "pullId": "1"
+  },
+  "query": "query PullDetailsForPullDetails($repoName: String!, $ownerName: String!, $pullId: String!) {  pull(repoName: $repoName, ownerName: $ownerName, pullId: $pullId) {    ...PullDetails    __typename  }}fragment PullDetails on Pull {  _id  fromBranchName  toBranchName  details {    ...PullDetailsForPullDetails    __typename  }  __typename}fragment PullDetailsForPullDetails on PullDetails {  ... on PullDetailComment {    ...PullDetailComment    __typename  }  ... on PullDetailCommit {    ...PullDetailCommit    __typename  }  ... on PullDetailSummary {    ...PullDetailSummary    __typename  }  ... on PullDetailLog {    ...PullDetailLog    __typename  }  __typename}fragment PullDetailComment on PullDetailComment {  _id  authorName  comment  createdAt  updatedAt  __typename}fragment PullDetailCommit on PullDetailCommit {  _id  username  message  createdAt  commitId  parentCommitId  __typename}fragment PullDetailSummary on PullDetailSummary {  _id  username  createdAt  numCommits  __typename}fragment PullDetailLog on PullDetailLog {  _id  username  createdAt  activity  __typename}"
+}

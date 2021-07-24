@@ -115,18 +115,22 @@ class PRManager:
                 "state": pr_meta["state"],
                 "title": pr_meta["title"],
                 "message": pr_meta["description"],
+                "creator": pr_meta["creatorName"],
+                "fork": bool(pr_meta["isFork"]),
+
+                # Source Of Data To Merge
                 "source": {
                     "branch": pr_meta["fromBranchName"],
                     "owner": pr_meta["fromBranchOwnerName"],
                     "repo": pr_meta["fromBranchRepoName"]
                 },
+
+                # Destination Of Where To Merge Data
                 "destination": {
                     "branch": pr_meta["toBranchName"],
                     "owner": pr_meta["toBranchOwnerName"],
                     "repo": pr_meta["toBranchRepoName"]
-                },
-                "creator": pr_meta["creatorName"],
-                "fork": bool(pr_meta["isFork"])
+                }
             }
 
             return simple_result
@@ -148,7 +152,7 @@ class PRManager:
             Optional Values - These values change the state of the PR.
             @param pr_state: Can be "Open", "Closed", or "Merged". These values are case-sensitive.
             @param pr_title: The title of the PR as seen in the PR list of the repo.
-            @param pr_message: The message of the PR as seen in the PR details page. This is not a PR comment. If you want to set this as empty, use and empty string. Setting this to None will just keep the same message as before.
+            @param pr_message: The message of the PR as seen in the PR details page. This is not a PR comment. If you want to set this as empty, use an empty string. Setting this to None will just keep the same message as before.
 
             @return: A tuple of the HTTP Status Code and the response body read as JSON. The response body is first and then the status code comes second.
         """
@@ -196,6 +200,16 @@ class PRManager:
         return result, status_code
 
     def merge_pr(self, repo_owner: str, repo_name: str, pr_id: int):
+        """
+            For when you want to merge an existing PR.
+
+            @param repo_owner: The owner of the repo where the PR resides. Not the submitter of the PR.
+            @param repo_name: The name of the repo where the PR resides. Not the name of the fork that the PR came from.
+            @param pr_id: The id of the PR as seen in the PR list of the repo.
+
+            @return: A tuple of the HTTP Status Code and the response body read as JSON. The response body is first and then the status code comes second.
+        """
+
         graphql_query: dict = {
           "operationName": "MergePull",
           "variables": {
@@ -209,15 +223,130 @@ class PRManager:
         result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
         return result, status_code
 
+    def comment_on_pr(self, repo_owner: str, repo_name: str, pr_id: int, message: str):
+        """
+            For when you want to comment on a PR.
+            The API does not check for duplicate comments, so you'll want to do that yourself.
+
+            @param repo_owner: The owner of the repo where the PR resides. Not the submitter of the PR.
+            @param repo_name: The name of the repo where the PR resides. Not the name of the fork that the PR came from.
+            @param pr_id: The id of the PR as seen in the PR list of the repo.
+
+            @return: A tuple of the HTTP Status Code and the response body read as JSON. The response body is first and then the status code comes second.
+        """
+
+        graphql_query: dict = {
+          "operationName": "CreatePullComment",
+          "variables": {
+            "ownerName": repo_owner,
+            "repoName": repo_name,
+            "parentId": str(pr_id),
+            "comment": str(message)
+          },
+          "query": "mutation CreatePullComment($repoName: String!, $ownerName: String!, $parentId: String!, $comment: String!) {  createPullComment(    repoName: $repoName    ownerName: $ownerName    pullId: $parentId    comment: $comment  ) {    ...PullSummaryForPullDetails    __typename  }}fragment PullSummaryForPullDetails on PullSummary {  _id  __typename}"
+        }
+
+        result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+        return result, status_code
+
+    def create_pr(self, source_repo_owner: str, source_repo_name: str, source_branch: str,
+                  destination_repo_owner: str, destination_repo_name: str, destination_branch: str,
+                  pr_title: str = "", pr_message: str = "", simple: bool = True):
+        """
+            Creates a new PR with the already uploaded branch that is to be merged with the destination branch.
+
+            @param source_repo_owner: The owner of the repo the PR is coming from.
+            @param source_repo_name: The name of the repo the PR is coming from.
+            @param source_branch: The name of the branch the PR is coming from.
+
+            @param destination_repo_owner: The owner of the repo the PR is merging into.
+            @param destination_repo_name: The name of the repo the PR is merging into.
+            @param destination_branch: The name of the branch the PR is merging into.
+
+            Optional Values
+            @param pr_title: The title of the PR as seen in the PR list of the repo. This is optional, but you should set a custom title.
+            @param pr_message: The message of the PR as seen in the PR details page. This is not a PR comment. If you want to set this as empty, use an empty string.
+            @param simple: Boolean that defaults to True in order to provide a consistent and simple dictionary that'll remain the same even when the API changes. Changing this value to False will return the raw API body as a dictionary.
+        """
+
+        graphql_query: dict = {
+          "operationName": "CreatePullRequestWithForks",
+          "variables": {
+            "title": pr_title,
+            "description": pr_message,
+            "fromBranchName": source_branch,
+            "toBranchName": destination_branch,
+            "fromBranchOwnerName": source_repo_owner,
+            "fromBranchRepoName": source_repo_name,
+            "toBranchOwnerName": destination_repo_owner,
+            "toBranchRepoName": destination_repo_name,
+
+            # As far as I can tell, this is always the same as the destination versions.
+            "parentOwnerName": destination_repo_owner,
+            "parentRepoName": destination_repo_name
+          },
+          "query": "mutation CreatePullRequestWithForks($title: String!, $description: String!, $fromBranchName: String!, $toBranchName: String!, $fromBranchRepoName: String!, $fromBranchOwnerName: String!, $toBranchRepoName: String!, $toBranchOwnerName: String!, $parentRepoName: String!, $parentOwnerName: String!) {  createPullWithForks(    title: $title    description: $description    fromBranchName: $fromBranchName    toBranchName: $toBranchName    fromBranchOwnerName: $fromBranchOwnerName    fromBranchRepoName: $fromBranchRepoName    toBranchOwnerName: $toBranchOwnerName    toBranchRepoName: $toBranchRepoName    parentRepoName: $parentRepoName    parentOwnerName: $parentOwnerName  ) {    _id    pullId    __typename  }}"
+        }
+
+        result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+
+        if simple:
+            # I could return the simple value of lookup_pr, but I feel like this is not needed.
+            # I also intentionally made this a dictionary incase I needed to add more data in the future.
+            # That way I won't break backwards compatibility with existing code.
+            pr_meta: dict = result["data"]["createPullWithForks"]
+            simple_result: dict = {
+                "id": int(pr_meta["pullId"])
+            }
+
+            return simple_result
+
+        return result, status_code
+
 
 if __name__ == "__main__":
     try:
         manager = PRManager(token_file="token.txt")
+
+        # Update PR Demos
         # results, status_code = manager.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=4, pr_state="Open")
         # results, status_code, merged_results, merged_status_code = manager.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=3, pr_state="Merged")
-        results = manager.lookup_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=3)
 
-        print(results)
+        # Create and Then Lookup PR Demo
+        # create_pr_result = manager.create_pr(source_repo_owner="alexis-evelyn", source_repo_name="test-forking", source_branch="test_pr_script_5",
+        #                                      destination_repo_owner="alexis-evelyn", destination_repo_name="test-forking", destination_branch="master")
+        # lookup_pr_results = manager.lookup_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=create_pr_result["id"])
+
+        # print(f"Create PR Result: {create_pr_result}")
+        # print(f"Lookup PR Result: {lookup_pr_results}")
+
+        # Commenting On PR Demo
+        # manager.comment_on_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=5, message="This is a test comment 2")
+
+        # Lookup PR Demo
+        lookup_pr_results = manager.lookup_pr(repo_owner="dolthub", repo_name="logo-2k-extended", pr_id=23)
+
+        # PR Metadata
+        pr_id = lookup_pr_results["id"]
+        pr_state = lookup_pr_results["state"]
+        pr_title = lookup_pr_results["title"]
+        pr_message = lookup_pr_results["message"]
+        pr_creator = lookup_pr_results["creator"]
+        is_fork = lookup_pr_results["fork"]
+
+        # Source of Data To Merge
+        source_branch = lookup_pr_results["source"]["branch"]
+        source_owner = lookup_pr_results["source"]["owner"]
+        source_repo = lookup_pr_results["source"]["repo"]
+
+        # Destination Where To Merge Data
+        destination_branch = lookup_pr_results["destination"]["branch"]
+        destination_owner = lookup_pr_results["destination"]["owner"]
+        destination_repo = lookup_pr_results["destination"]["repo"]
+
+        print(f"PR {pr_id} - State: {pr_state} - Title: `{pr_title}` - Message: `{pr_message}` - Creator: {pr_creator} - Fork: {is_fork}")
+        print(f"PR {pr_id} - Source: {source_owner}/{source_repo}/{source_branch}")
+        print(f"PR {pr_id} - Destination: {destination_owner}/{destination_repo}/{destination_branch}")
     except NoAuthException as e:
         print(f"NoAuthException: {e}")
     except NeedAtLeastOneOptionalArgumentException as e:
