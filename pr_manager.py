@@ -138,6 +138,9 @@ class PRManager:
             To update the Pull Request in question. Due to the nature of the API, everything has to be updated, even if you want to just close the PR.
             To help facilitate simple actions, the PR's existing data will be automatically pulled if an optional value is set to None.
 
+            If merging the PR, this function will handle merging for you and will return the merge status of the PR appended to the PR update status.
+            If you don't want to update the PR, but just want to merge the PR, then call the merge_pr function instead.
+
             @param repo_owner: The owner of the repo where the PR resides. Not the submitter of the PR.
             @param repo_name: The name of the repo where the PR resides. Not the name of the fork that the PR came from.
             @param pr_id: The id of the PR as seen in the PR list of the repo.
@@ -153,6 +156,12 @@ class PRManager:
         # At least one optional argument is required, it doesn't matter which one.
         if pr_state is None and pr_title is None and pr_message is None:
             raise NeedAtLeastOneOptionalArgumentException("Specify at least one of pr_state, pr_title, or pr_message.")
+
+        # Handle Merging For Caller
+        should_merge: bool = False
+        if pr_state == "Merged":
+            should_merge: bool = True
+            pr_state = None  # The GraphQL API falsly thinks the PR is merged when setting it to Merged before actually merging it.
 
         # If we don't have every value filled out, find out the existing values from the PR.
         if pr_state is None or pr_title is None or pr_message is None:
@@ -179,14 +188,34 @@ class PRManager:
         }
 
         result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+
+        if should_merge:
+            merge_result, merge_status_code = self.merge_pr(repo_owner=repo_owner, repo_name=repo_name, pr_id=pr_id)
+            return result, status_code, merge_result, merge_status_code
+
+        return result, status_code
+
+    def merge_pr(self, repo_owner: str, repo_name: str, pr_id: int):
+        graphql_query: dict = {
+          "operationName": "MergePull",
+          "variables": {
+            "ownerName": repo_owner,
+            "repoName": repo_name,
+            "pullId": str(pr_id)
+          },
+          "query": "mutation MergePull($repoName: String!, $ownerName: String!, $pullId: String!) {  mergePull(repoName: $repoName, ownerName: $ownerName, pullId: $pullId) {    ...PullForPullDetails    __typename  }}fragment PullForPullDetails on Pull {  _id  pullId  state  title  description  fromBranchName  fromBranchOwnerName  fromBranchRepoName  toBranchName  toBranchOwnerName  toBranchRepoName  creatorName  isFork  __typename}"
+        }
+
+        result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
         return result, status_code
 
 
 if __name__ == "__main__":
     try:
         manager = PRManager(token_file="token.txt")
-        results, status_code = manager.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=2, pr_title="Test PR Script", pr_state="Closed", pr_message="This is a test PR message!")
-        # results = manager.lookup_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=2)
+        # results, status_code = manager.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=4, pr_state="Open")
+        # results, status_code, merged_results, merged_status_code = manager.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=3, pr_state="Merged")
+        results = manager.lookup_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=3)
 
         print(results)
     except NoAuthException as e:
