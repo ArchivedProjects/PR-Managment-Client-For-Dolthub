@@ -81,6 +81,21 @@ class Dolthub:
         return result, response.status_code, response
 
     def lookup_pr(self, repo_owner: str, repo_name: str, pr_id: int, simple: bool = True):
+        """
+            Lookup detailed information on the PR in question.
+
+            Used by the update_pr function if not all optional values are specified in order to fill in the missing information.
+
+            @param repo_owner: The owner of the repo where the PR resides. Not the submitter of the PR.
+            @param repo_name: The name of the repo where the PR resides. Not the name of the fork that the PR came from.
+            @param pr_id: The id of the PR as seen in the PR list of the repo.
+
+            Optional Values
+            @param simple: Boolean that defaults to True in order to provide a consistent and simple dictionary that'll remain the same even when the API changes. Changing this value to False will return the raw API body as a dictionary.
+
+            @return: Information about the PR requested and if simple mode is turned off, also the HTTP status code.
+        """
+
         graphql_query: dict = {
           "operationName": "PullForPullDetailsQuery",
           "variables": {
