@@ -496,8 +496,7 @@ class PRManager:
 
 if __name__ == "__main__":
     """
-        This is the main function.
-        This is purely meant for demonstration purposes and should be disregarded for any practical purposes.
+        The main function is purely meant for demonstration purposes and should be disregarded for any practical purposes.
     """
 
     try:
