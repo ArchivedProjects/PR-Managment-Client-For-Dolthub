@@ -359,6 +359,72 @@ class PRManager:
             else:
                 yield result, status_code
 
+    def list_pr_change_log(self, repo_owner: str, repo_name: str, pr_id: int, page_token: str = None, simple: bool = True):
+        """
+            ...
+        """
+
+        graphql_query: dict = {
+          "operationName": "PullDetailsForPullDetails",
+          "variables": {
+            "ownerName": repo_owner,
+            "repoName": repo_name,
+            "pullId": str(pr_id)
+          },
+          "query": "query PullDetailsForPullDetails($repoName: String!, $ownerName: String!, $pullId: String!) {  pull(repoName: $repoName, ownerName: $ownerName, pullId: $pullId) {    ...PullDetails    __typename  }}fragment PullDetails on Pull {  _id  fromBranchName  toBranchName  details {    ...PullDetailsForPullDetails    __typename  }  __typename}fragment PullDetailsForPullDetails on PullDetails {  ... on PullDetailComment {    ...PullDetailComment    __typename  }  ... on PullDetailCommit {    ...PullDetailCommit    __typename  }  ... on PullDetailSummary {    ...PullDetailSummary    __typename  }  ... on PullDetailLog {    ...PullDetailLog    __typename  }  __typename}fragment PullDetailComment on PullDetailComment {  _id  authorName  comment  createdAt  updatedAt  __typename}fragment PullDetailCommit on PullDetailCommit {  _id  username  message  createdAt  commitId  parentCommitId  __typename}fragment PullDetailSummary on PullDetailSummary {  _id  username  createdAt  numCommits  __typename}fragment PullDetailLog on PullDetailLog {  _id  username  createdAt  activity  __typename}"
+        }
+
+        result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+        if simple:
+            # We Paginate The Log For The Caller And Standardize The Format Too If Simple Mode Is On
+            log_entries: list = result["data"]["pull"]["details"]
+
+            entry_types: dict = {
+                "PullDetailComment": "Comment",
+                "PullDetailCommit": "Commit",
+                "PullDetailSummary": "Summary",
+                "PullDetailLog": "Log"
+            }
+
+            # We can only have Comment, Commit, Summary, and Log as our types
+            for entry in log_entries:
+                # Comment - authorName, comment, updatedAt
+                # Commit - username, message, commitId, parentCommitId
+                # Summary - username, numCommits
+                # Log - username, activity
+
+                simple_result: dict = {
+                    "id": entry["_id"],
+                    "type": entry_types[entry["__typename"]] if entry["__typename"] in entry_types else entry["__typename"],  # Future Proofing For New Types
+                    "creation_date_unix": entry["createdAt"],
+                    "creation_date": datetime.fromtimestamp(entry["createdAt"]/1000.0)
+                }
+
+                # Add In Entry Type Specific Metadata
+                # Would Be Nice: https://docs.python.org/3.10/whatsnew/3.10.html#pep-634-structural-pattern-matching
+                if simple_result["type"] == "Comment":
+                    simple_result["user"] = entry["authorName"]
+                    simple_result["updated_date_unix"] = entry["updatedAt"]
+                    simple_result["updated_date"] = datetime.fromtimestamp(entry["updatedAt"]/1000.0)
+                    simple_result["message"] = entry["comment"]
+                elif simple_result["type"] == "Commit":
+                    simple_result["user"] = entry["username"]
+                    simple_result["message"] = entry["message"]
+                    simple_result["current_commit_id"] = entry["commitId"]
+                    simple_result["previous_commit_id"] = entry["parentCommitId"]
+                elif simple_result["type"] == "Summary":
+                    simple_result["user"] = entry["username"]
+                    simple_result["commits"] = entry["numCommits"]
+                elif simple_result["type"] == "Log":
+                    simple_result["user"] = entry["username"]
+                    simple_result["state"] = entry["activity"]
+
+                yield simple_result
+        else:
+            # Just Return The Raw API Response If Simple Mode Is Off
+            # This is set to yield incase pagination is added to this api call in the future
+            yield result, status_code
+
 
 if __name__ == "__main__":
     """
@@ -369,17 +435,21 @@ if __name__ == "__main__":
     try:
         manager = PRManager(token_file="token.txt")
 
+        # for entry in manager.list_pr_change_log(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=5):
+        #     print(json.dumps(entry, default=str))
+        # exit(0)
+
         # List PRs Demo
         # pr_list = manager.list_prs(repo_owner="dolthub", repo_name="logo-2k-extended")
         # for pr in pr_list:
         #     print(json.dumps(pr, default=str))
 
         # Update PR Demos
-        # results, status_code = manager.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=4, pr_state="Open")
+        # results, status_code = manager.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=6, pr_state="Open")
         # results, status_code, merged_results, merged_status_code = manager.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=3, pr_state="Merged")
 
         # Create and Then Lookup PR Demo
-        # create_pr_result = manager.create_pr(source_repo_owner="alexis-evelyn", source_repo_name="test-forking", source_branch="test_pr_script_5",
+        # create_pr_result = manager.create_pr(source_repo_owner="alexis-evelyn", source_repo_name="test-forking", source_branch="test_pr_script_6",
         #                                      destination_repo_owner="alexis-evelyn", destination_repo_name="test-forking", destination_branch="master")
         # lookup_pr_results = manager.lookup_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=create_pr_result["id"])
 
