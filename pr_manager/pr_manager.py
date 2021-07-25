@@ -530,9 +530,12 @@ if __name__ == "__main__":
         # create_pr_result = manager.create_pr(source_repo_owner="alexis-evelyn", source_repo_name="test-forking", source_branch="test_pr_script_6",
         #                                      destination_repo_owner="alexis-evelyn", destination_repo_name="test-forking", destination_branch="master")
         # lookup_pr_results = manager.lookup_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=create_pr_result["id"])
-
+        #
         # print(f"Create PR Result: {create_pr_result}")
         # print(f"Lookup PR Result: {lookup_pr_results}")
+
+        # Merge PR Demo
+        # results, status_code = manager.merge_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=7)
 
         # Commenting On PR Demo
         # manager.comment_on_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=5, message="This is a test comment 2")
