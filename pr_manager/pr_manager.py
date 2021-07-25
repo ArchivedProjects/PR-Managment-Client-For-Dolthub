@@ -72,7 +72,17 @@ class PRManager:
 
         response = requests.post(url=self.graphql_url, json=graphql_query, headers=headers)
 
-        result = json.loads(response.text)
+        # Dolthub Cannot Contact AWS At The Moment If This Is Triggered
+        if response.text.strip() == "upstream request timeout":
+            raise APIServerException("GraphQL API Cannot Contact Upstream Right Now. Please Try Again Later!", response.text, response.status_code, response)
+
+        # Easier To Ask For Forgiveness Than Permission Philosophy - https://docs.python.org/3.10/glossary.html#term-EAFP
+        # EAFP is weird to me as I'm used to the Look Before You Leap Philosophy From Java
+        # Also To Note: https://stackoverflow.com/questions/404795/lbyl-vs-eafp-in-java#comment230588_404802
+        try:
+            result = json.loads(response.text)
+        except ValueError:
+            raise APIServerException("GraphQL sent a non-JSON Response!", response.text, response.status_code, response)
 
         if response.status_code not in self.allowed_status_codes:
             raise APIServerException("GraphQL API threw a HTTP Status Code exception", result, response.status_code, response)
@@ -657,10 +667,9 @@ if __name__ == "__main__":
     except APIServerException as e:
         message, result, status_code, response = e.args
 
-        if "errors" in result:
+        if isinstance(result, dict) and "errors" in result:
             for error in result["errors"]:
                 if "message" in error:
                     print(f"APIServerException: {message} - {error['message']}")
         else:
-            print(f"APIServerException: {message} - Status Code: {status_code}")
             print(f"APIServerException: {message} - Status Code: {status_code}")
