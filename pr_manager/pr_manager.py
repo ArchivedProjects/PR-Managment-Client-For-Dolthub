@@ -508,7 +508,7 @@ if __name__ == "__main__":
         # List Comments With Creation Date Demo
         # for entry in manager.list_pr_change_log(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=6):
         #     if entry["type"] == "Comment":
-        #         print(entry["message"], entry["id"])
+        #         print(entry["message"], entry["creation_date"])
         #         print(json.dumps(entry, default=str))
 
         # Batch Delete Comments Demo
