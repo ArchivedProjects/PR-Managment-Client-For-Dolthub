@@ -17,7 +17,7 @@ I should note, PR changelogs include listing comments, merge status, closing sta
 
 In order to use the PR Manager, you'll have to import PRManager and you'll also want to at least handle APIServerException. APIServerException is thrown whenever Dolthub's API throws an exception.
 
-You may also be interested in [doltpy][DoltPy] which is an official Dolthub tool in order to create and manage repos. You can use DoltPy to create and push your branch to your fork and then submit a PR from your fork using this PR Manager.
+You may also be interested in [DoltPy][doltpy] which is an official Dolthub tool in order to create and manage repos. You can use DoltPy to create and push your branch to your fork and then submit a PR from your fork using this PR Manager.
 
 I should also mention, the authentication token is just the value of the cookie, dolthubToken. You can either create a text file with the contents of the cookie in it or just feed the cookie in directly. If your cookie looks like `dolthubToken=abc123;`, you'd want to just put `abc123` in your file or feed it in as a variable. Newlines don't matter in the file as I've had plenty of experiences with editors that just have to have the newline in the file, so I strip them out for you. The purpose of the file method is so you don't have to hardcode the cookie into your script and I make it as easy as possible by reading in the file for you so all you need to do is pass in the filepath if you use the file method.
 
@@ -33,7 +33,7 @@ for pr in manager.list_prs(repo_owner="dolthub", repo_name="logo-2k-extended"):
     print(f"{pr['id']} - {pr['state']} - {pr['title']} - {pr['creator']} - {pr['creation_date']}")
 ```
 
-There are quite a few examples in the [pr_manager][pr_manager.py] script that I left in the section that checks if the script is the main file running (at the bottom of the script). I have tested all of the examples I listed in that section before submitting them to be committed.
+There are quite a few examples in the [pr_manager.py][pr_manager] script that I left in the section that checks if the script is the main file running (at the bottom of the script). I have tested all of the examples I listed in that section before submitting them to be committed.
 
 Ideas which you may want to consider include but are not limited to, submitting data for bounties, automatic PR validation\*, merge bots, actions based on submitted data\*, and even comment moderation.
 
