@@ -493,6 +493,92 @@ class PRManager:
             # This is set to yield incase pagination is added to this api call in the future
             yield result, status_code
 
+    def pull_pr_diff_summary(self, source_repo_owner: str, source_repo_name: str, source_commit_id: str, destination_repo_owner: str, destination_repo_name: str, destination_commit_id: str, simple: bool = True):
+        """
+            Needs Documentation...
+        """
+
+        graphql_query: dict = {
+          "operationName": "DiffSummaryAsync",
+          "variables": {
+            "initialReq": {
+              "fromRepoName": destination_repo_name,
+              "fromOwnerName": destination_repo_owner,
+              "toRepoName": source_repo_name,
+              "toOwnerName": source_repo_owner,
+              "fromCommitId": destination_commit_id,
+              "toCommitId": source_commit_id
+            }
+          },
+          "query": "query DiffSummaryAsync($initialReq: DiffSummaryReq, $resolvedReq: ResolvedDiffSummaryReq) {  diffSummaryAsync(initialReq: $initialReq, resolvedReq: $resolvedReq) {    resolvedReq {      fromCommitName      toCommitName      tableName      __typename    }    diffSummary {      ...DiffSummaryForDiffs      __typename    }    __typename  }}fragment DiffSummaryForDiffs on DiffSummary {  rowsUnmodified  rowsAdded  rowsDeleted  rowsModified  cellsModified  rowCount  cellCount  __typename}"
+        }
+
+        result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+        if simple:
+            summary = result["data"]["diffSummaryAsync"]["diffSummary"]
+
+            simple_result: dict = {
+                "rows": {
+                    "count": summary["rowCount"],
+                    "modified": summary["rowsModified"],
+                    "unmodified": summary["rowsUnmodified"],  # Functionally, this is rowCount-rowsModified.
+                    "added": summary["rowsAdded"],
+                    "deleted": summary["rowsDeleted"]
+                },
+                "cells": {
+                    "count": summary["cellCount"],
+                    "modified": summary["cellsModified"],
+                    "unmodified": summary["cellCount"]-summary["cellsModified"]  # Would be cellsUnmodified if the key existed.
+
+                    # There's no way for me to know this information without
+                    #   pulling all the data for both master and the PR
+                    # "added": summary["cellsAdded"],
+                    # "deleted": summary["cellsDeleted"]
+                }
+            }
+
+            return simple_result
+
+        return result, status_code
+
+    def pull_pr_diff(self, repo_owner: str, repo_name: str, pr_id: int, page_token: str = None, simple: bool = True):
+        """
+            Not Fully Implemented Yet...
+        """
+
+        graphql_query: dict = {
+          "operationName": "PullDiffForTableList",
+          "variables": {
+            "ownerName": repo_owner,
+            "repoName": repo_name,
+            "pullId": str(pr_id)
+          },
+          "query": "query PullDiffForTableList($ownerName: String!, $repoName: String!, $pullId: String!) {  pullCommitDiff(repoName: $repoName, ownerName: $ownerName, pullId: $pullId) {    ...CommitDiffForTableList    __typename  }}fragment CommitDiffForTableList on CommitDiff {  _id  toOwnerName  toRepoName  toCommitId  fromOwnerName  fromRepoName  fromCommitId  tableDiffs {    ...TableDiffForTableList    __typename  }  __typename}fragment TableDiffForTableList on TableDiff {  oldTable {    ...TableForDiffTableList    __typename  }  newTable {    ...TableForDiffTableList    __typename  }  numChangedSchemas  rowDiffColumns {    ...ColumnForDiffTableList    __typename  }  rowDiffs {    ...RowDiffListForTableList    __typename  }  schemaDiff {    ...SchemaDiffForTableList    __typename  }  schemaPatch  __typename}fragment TableForDiffTableList on Table {  tableName  columns {    ...ColumnForDiffTableList    __typename  }  __typename}fragment ColumnForDiffTableList on Column {  name  isPrimaryKey  type  maxLength  constraints {    notNull    __typename  }  __typename}fragment RowDiffListForTableList on RowDiffList {  list {    ...RowDiffForTableList    __typename  }  nextPageToken  filterByRowTypeRequest {    pageToken    filterByRowType    __typename  }  __typename}fragment RowDiffForTableList on RowDiff {  added {    ...RowForTableList    __typename  }  deleted {    ...RowForTableList    __typename  }  __typename}fragment RowForTableList on Row {  columnValues {    ...ColumnValueForTableList    __typename  }  __typename}fragment ColumnValueForTableList on ColumnValue {  displayValue  __typename}fragment SchemaDiffForTableList on TextDiff {  leftLines {    ...SchemaDiffLineForTableList    __typename  }  rightLines {    ...SchemaDiffLineForTableList    __typename  }  __typename}fragment SchemaDiffLineForTableList on Line {  content  lineNumber  type  __typename}"
+        }
+
+        # Allows the Caller To Start From A Specific Page
+        if page_token is not None:
+            graphql_query["variables"]["pageToken"] = page_token
+
+        has_next_page: bool = True
+        while has_next_page:
+            result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+            pr_meta = result["data"]["pullCommitDiff"]
+
+            # Check For Next Page Token If Any, Otherwise Set The Loop To Close
+            # TODO: Determine If Filtering For One Table With Simple Mode Or All Tables
+            # TODO: Get rid of the hardcoded 0, the 0 is a table number and a non-zero table may have a token while the 0 may not.
+            if "nextPageToken" not in pr_meta["tableDiffs"][0]["rowDiffs"] or pr_meta["tableDiffs"][0]["rowDiffs"]["nextPageToken"].strip() == "":
+                has_next_page: bool = False
+            else:
+                graphql_query["variables"]["pageToken"] = pr_meta["tableDiffs"][0]["rowDiffs"]["nextPageToken"]
+
+            if simple:
+                # TODO: Implement Simple Mode
+                yield pr_meta
+            else:
+                yield result, status_code
+
 
 if __name__ == "__main__":
     """
@@ -576,4 +662,5 @@ if __name__ == "__main__":
                 if "message" in error:
                     print(f"APIServerException: {message} - {error['message']}")
         else:
+            print(f"APIServerException: {message} - Status Code: {status_code}")
             print(f"APIServerException: {message} - Status Code: {status_code}")
