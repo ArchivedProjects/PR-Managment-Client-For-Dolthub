@@ -251,6 +251,53 @@ class PRManager:
         result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
         return result, status_code
 
+    def delete_comment(self, comment_id: str):
+        """
+            Delete a comment.
+
+            @param comment_id: The id of the comment you want to delete.
+
+            @return: A tuple of the HTTP Status Code and the response body read as JSON. The response body is first and then the status code comes second.
+        """
+
+        graphql_query: dict = {
+          "operationName": "DeletePullComment",
+          "variables": {
+            "_id": comment_id
+          },
+          "query": "mutation DeletePullComment($_id: String!) {  deletePullComment(_id: $_id) {    ...PullSummaryForPullDetails    __typename  }}fragment PullSummaryForPullDetails on PullSummary {  _id  __typename}"
+        }
+
+        result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+        return result, status_code
+
+    def update_comment(self, comment_id: str, message: str):
+        """
+            Update a comment.
+
+            @param comment_id: The id of the comment you want to update.
+            @param message: The new message to replace the existing comment with.
+
+            @return: A tuple of the HTTP Status Code and the response body read as JSON. The response body is first and then the status code comes second.
+        """
+
+        # I would grab the author name, but I cannot look up the comment directly,
+        # and don't want to burn cycles paginating for every update. So, thankfully,
+        # it appears the author name doesn't change anything. Sadly I can't remove,
+        # the field, otherwise I would have done so.
+        graphql_query: dict = {
+          "operationName": "UpdatePullComment",
+          "variables": {
+            "_id": comment_id,
+            "authorName": "please-explain-authorName",  # Not sure what this is about, I'm not able to change the author name anyway.
+            "comment": message
+          },
+          "query": "mutation UpdatePullComment($_id: String!, $authorName: String!, $comment: String!) {  updatePullComment(_id: $_id, authorName: $authorName, comment: $comment) {    ...PullSummaryForPullDetails    __typename  }}fragment PullSummaryForPullDetails on PullSummary {  _id  __typename}"
+        }
+
+        result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+        return result, status_code
+
     def create_pr(self, source_repo_owner: str, source_repo_name: str, source_branch: str,
                   destination_repo_owner: str, destination_repo_name: str, destination_branch: str,
                   pr_title: str = "", pr_message: str = "", simple: bool = True):
@@ -269,6 +316,8 @@ class PRManager:
             @param pr_title: The title of the PR as seen in the PR list of the repo. This is optional, but you should set a custom title.
             @param pr_message: The message of the PR as seen in the PR details page. This is not a PR comment. If you want to set this as empty, use an empty string.
             @param simple: Boolean that defaults to True in order to provide a consistent and simple dictionary that'll remain the same even when the API changes. Changing this value to False will return the raw API body as a dictionary.
+
+            @return: Information about the PR created and if simple mode is turned off, also the HTTP status code.
         """
 
         graphql_query: dict = {
@@ -307,7 +356,16 @@ class PRManager:
 
     def list_prs(self, repo_owner: str, repo_name: str, page_token: str = None, simple: bool = True):
         """
-            ...
+            List PRs for a repo.
+
+            @param repo_owner: The owner of the repo you want to list the PRs for.
+            @param repo_name: The name of the repo you want to list the PRs for.
+
+            Optional Values
+            @param page_token: The page token you want to start with (untested).
+            @param simple: Boolean that defaults to True in order to provide a consistent and simple dictionary that'll remain the same even when the API changes. Changing this value to False will return the raw API body as a dictionary.
+
+            @return: The list of PRs and if simple mode is turned off, also the HTTP status code.
         """
 
         graphql_query: dict = {
@@ -361,7 +419,17 @@ class PRManager:
 
     def list_pr_change_log(self, repo_owner: str, repo_name: str, pr_id: int, page_token: str = None, simple: bool = True):
         """
-            ...
+            List The Changes To Requested PR
+
+            @param repo_owner: The owner of the repo you want to list the PRs for.
+            @param repo_name: The name of the repo you want to list the PRs for.
+            @param pr_id: The id of the PR as seen in the PR list of the repo.
+
+            Optional Values
+            @param page_token: The page token you want to start with (not implemented due to pagination not existing for this api).
+            @param simple: Boolean that defaults to True in order to provide a consistent and simple dictionary that'll remain the same even when the API changes. Changing this value to False will return the raw API body as a dictionary.
+
+            @return: The list of changes to the PR and if simple mode is turned off, also the HTTP status code.
         """
 
         graphql_query: dict = {
@@ -435,9 +503,20 @@ if __name__ == "__main__":
     try:
         manager = PRManager(token_file="token.txt")
 
+        # Update Comment Demo
+        # manager.update_comment(comment_id="repositoryOwners/alexis-evelyn/repositories/test-forking/pulls/6/comments/cbda83a6-c46c-4a64-ad32-58d8a22ae476", message="Automated Comment Update #3")
+
+        # List Comments With Creation Date Demo
+        # for entry in manager.list_pr_change_log(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=6):
+        #     if entry["type"] == "Comment":
+        #         print(entry["message"], entry["id"])
+        #         print(json.dumps(entry, default=str))
+
+        # Batch Delete Comments Demo
         # for entry in manager.list_pr_change_log(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=5):
-        #     print(json.dumps(entry, default=str))
-        # exit(0)
+        #     if entry["type"] == "Comment" and "This is an automated comment to force pagination for the PR" in entry["message"] and entry["user"] == "alexis-evelyn":
+        #         print(f"Deleting Comment With Message: {entry['message']}!!!")
+        #         manager.delete_comment(comment_id=entry["id"])
 
         # List PRs Demo
         # pr_list = manager.list_prs(repo_owner="dolthub", repo_name="logo-2k-extended")
