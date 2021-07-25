@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import requests
 import json
 import os
@@ -303,10 +305,74 @@ class PRManager:
 
         return result, status_code
 
+    def list_prs(self, repo_owner: str, repo_name: str, page_token: str = None, simple: bool = True):
+        """
+            ...
+        """
+
+        graphql_query: dict = {
+          "operationName": "PullsForRepo",
+          "variables": {
+            "ownerName": repo_owner,
+            "repoName": repo_name
+          },
+          "query": "query PullsForRepo($ownerName: String!, $repoName: String!, $pageToken: String) {  pulls(ownerName: $ownerName, repoName: $repoName, pageToken: $pageToken) {    ...PullListForPullList    __typename  }}fragment PullListForPullList on PullList {  list {    ...PullForPullList    __typename  }  nextPageToken  __typename}fragment PullForPullList on Pull {  _id  createdAt  ownerName  repoName  pullId  creatorName  description  state  title  __typename}"
+        }
+
+        # Allows the Caller To Start From A Specific Page
+        if page_token is not None:
+            graphql_query["variables"]["pageToken"] = page_token
+
+        has_next_page: bool = True
+        while has_next_page:
+            result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+
+            # Check For Next Page Token If Any, Otherwise Set The Loop To Close
+            if "nextPageToken" not in result["data"]["pulls"] or result["data"]["pulls"]["nextPageToken"].strip() == "":
+                has_next_page: bool = False
+            else:
+                graphql_query["variables"]["pageToken"] = result["data"]["pulls"]["nextPageToken"]
+
+            if simple:
+                pr_list: list = result["data"]["pulls"]["list"]
+
+                # More than One PR is likely to be in this list
+                # As this is supposed to be simple mode, we take out the need
+                # for the caller to have to use a for loop inside a for loop.
+                for pr in pr_list:
+                    simple_result: dict = {
+                        "id": int(pr["pullId"]),
+                        "state": pr["state"],
+                        "title": pr["title"],
+                        "message": pr["description"],
+                        "creator": pr["creatorName"],
+                        "creation_date_unix": pr["createdAt"],
+
+                        # The divide over 1000 is to convert the timestamp to
+                        # a format that Python can understand.
+                        "creation_date": datetime.fromtimestamp(pr["createdAt"]/1000.0),
+                        "owner": pr["ownerName"],
+                        "repo": pr["repoName"]
+                    }
+
+                    yield simple_result
+            else:
+                yield result, status_code
+
 
 if __name__ == "__main__":
+    """
+        This is the main function.
+        This is purely meant for demonstration purposes and should be disregarded for any practical purposes.
+    """
+
     try:
         manager = PRManager(token_file="token.txt")
+
+        # List PRs Demo
+        # pr_list = manager.list_prs(repo_owner="dolthub", repo_name="logo-2k-extended")
+        # for pr in pr_list:
+        #     print(json.dumps(pr, default=str))
 
         # Update PR Demos
         # results, status_code = manager.update_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=4, pr_state="Open")
