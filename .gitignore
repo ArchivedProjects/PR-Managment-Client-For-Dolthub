@@ -1,5 +1,13 @@
-.DS_Store
-token.txt
+# Python Files
 __pycache__
-test.py
 venv
+
+# OSX Files
+.DS_Store
+
+# Auth Files
+token.txt
+
+# Test Files
+test.py
+test.csv

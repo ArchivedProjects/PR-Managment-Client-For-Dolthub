@@ -52,9 +52,10 @@ pip3 install git+https://github.com/alexis-evelyn/PR-Managment-Client-For-Dolthu
 ```
 
 <!-- TODO:
-    * Add in ability to view schema changes.
-    * Add in ability to lookup tables in a PR.
+    * Add in ability to view schema changes in a PR diff.
+    * Add in ability to lookup table names in a PR without downloading them.
     * Figure out what to do with diff selector.
+    * See if I can learn the number of rows in a diff for a table before I finish downloading the table.
 -->
 
 [doltpy]: https://pypi.org/project/doltpy
