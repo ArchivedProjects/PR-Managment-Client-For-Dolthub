@@ -513,7 +513,20 @@ class PRManager:
 
     def pull_pr_diff_summary(self, source_repo_owner: str, source_repo_name: str, source_commit_id: str, destination_repo_owner: str, destination_repo_name: str, destination_commit_id: str, simple: bool = True):
         """
-            Needs Documentation...
+            Retrieves the summary of changes the PR makes. This list will stay the same even after merge assuming the same commit ids are supplied.
+
+            @param source_repo_owner: The owner of the repo the PR is coming from.
+            @param source_repo_name: The name of the repo the PR is coming from.
+            @param source_commit_id: The commit id of the latest commit in the PR.
+
+            @param destination_repo_owner: The owner of the repo the PR is merging into.
+            @param destination_repo_name: The name of the repo the PR is merging into.
+            @param destination_commit_id: The commit id of the commit the PR is merging into.
+
+            Optional Values
+            @param simple: Boolean that defaults to True in order to provide a consistent and simple dictionary that'll remain the same even when the API changes. Changing this value to False will return the raw API body as a dictionary.
+
+            @return: The summary of changes the PR makes and if simple mode is turned off, also the HTTP status code.
         """
 
         graphql_query: dict = {
@@ -562,6 +575,25 @@ class PRManager:
     def pull_pr_diff(self, repo_owner: str, repo_name: str, pr_id: int, table_name: str = None, page_token: str = None, simple: bool = True):
         """
             Not Fully Implemented Yet...
+
+            The list of changes the PR makes.
+
+            *Currently shows row additions, row deletions, and indirectly, row modifications.
+            This does not show schema changes at the moment.*
+
+            Due to the complexity of working with a separate page token per table, non-simple mode is disabled right now.
+            So, the variable, simple, must be True else a NotImplementedException will be thrown.
+            Also, table_name is currently required as only simple mode can be used at the moment.
+
+            @param repo_owner: The owner of the repo where the PR resides. Not the submitter of the PR.
+            @param repo_name: The name of the repo where the PR resides. Not the name of the fork that the PR came from.
+            @param pr_id: The id of the PR as seen in the PR list of the repo.
+            @param table_name: The name of the table to lookup the diff for. This variable is case sensitive.
+
+            Optional Values
+            @param page_token: The page token you want to start with (untested).
+
+            @return: Information about the PR requested and if simple mode is turned off, also the HTTP status code.
         """
 
         # If a table is not specified, we aren't returning anything (when simple mode is on)
@@ -632,19 +664,23 @@ class PRManager:
 
                     added_row_simple = {}
                     if added_row is not None:
+                        counter: int = 0
                         for column in added_row:
-                            name = columns_list[added_row.index(column)]
+                            name = columns_list[counter]
                             value = column["displayValue"]
 
                             added_row_simple[name] = value
+                            counter += 1
 
                     deleted_row_simple = {}
                     if deleted_row is not None:
+                        counter: int = 0
                         for column in deleted_row:
-                            name = columns_list[deleted_row.index(column)]
+                            name = columns_list[counter]
                             value = column["displayValue"]
 
                             deleted_row_simple[name] = value
+                            counter += 1
 
                     # Check If Dictionaries are Empty To Set To None
                     if not added_row_simple:
@@ -655,7 +691,15 @@ class PRManager:
 
                     simple_result: dict = {
                         "added": added_row_simple,
-                        "deleted": deleted_row_simple
+                        "deleted": deleted_row_simple,
+
+                        # These exist to make your life a lot easier
+                        "source_repo_owner": pr_meta["toOwnerName"],
+                        "source_repo_name": pr_meta["toRepoName"],
+                        "source_commit_id": pr_meta["toCommitId"],
+                        "destination_repo_owner": pr_meta["fromOwnerName"],
+                        "destination_repo_name": pr_meta["fromRepoName"],
+                        "destination_commit_id": pr_meta["fromCommitId"]
                     }
 
                     yield simple_result
