@@ -56,6 +56,7 @@ pip3 install git+https://github.com/alexis-evelyn/PR-Managment-Client-For-Dolthu
     * Add in ability to lookup table names in a PR without downloading them.
     * Figure out what to do with diff selector.
     * See if I can learn the number of rows in a diff for a table before I finish downloading the table.
+    * Decide if I should throw an exception if the table does not exist in the PR Diff.
 -->
 
 [doltpy]: https://pypi.org/project/doltpy
