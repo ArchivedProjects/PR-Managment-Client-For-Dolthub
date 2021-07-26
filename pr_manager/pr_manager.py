@@ -29,6 +29,14 @@ class APIServerException(Exception):
     pass
 
 
+class NotImplementedException(Exception):
+    """
+        Thrown when the feature is not implemented.
+    """
+
+    pass
+
+
 class PRManager:
     def __init__(self, token: str = None, token_file: str = None, user_agent: str = "Alexis' Private API Client For Bounties"):
         """
@@ -551,10 +559,18 @@ class PRManager:
 
         return result, status_code
 
-    def pull_pr_diff(self, repo_owner: str, repo_name: str, pr_id: int, page_token: str = None, simple: bool = True):
+    def pull_pr_diff(self, repo_owner: str, repo_name: str, pr_id: int, table_name: str = None, page_token: str = None, simple: bool = True):
         """
             Not Fully Implemented Yet...
         """
+
+        # If a table is not specified, we aren't returning anything (when simple mode is on)
+        # If simple mode is off, then the user has to deal with everything themselves
+        if not isinstance(table_name, str) and simple:
+            # I currently only return one table's diff to make life a lot simpler in simple mode,
+            #   that and I have yet to determine exactly how pagination works with multiple separate pagination tokens, one for each table.
+            # More info can be seen in the comment wall where non-simple mode pagination is supposed to occur.
+            raise NeedAtLeastOneOptionalArgumentException("The table_name argument is required for simple mode. Please specify the name of the table you want to view the diff for as a string. The variable is case sensitive.")
 
         graphql_query: dict = {
           "operationName": "PullDiffForTableList",
@@ -573,21 +589,83 @@ class PRManager:
         has_next_page: bool = True
         while has_next_page:
             result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
-            pr_meta = result["data"]["pullCommitDiff"]
-
-            # Check For Next Page Token If Any, Otherwise Set The Loop To Close
-            # TODO: Determine If Filtering For One Table With Simple Mode Or All Tables
-            # TODO: Get rid of the hardcoded 0, the 0 is a table number and a non-zero table may have a token while the 0 may not.
-            if "nextPageToken" not in pr_meta["tableDiffs"][0]["rowDiffs"] or pr_meta["tableDiffs"][0]["rowDiffs"]["nextPageToken"].strip() == "":
-                has_next_page: bool = False
-            else:
-                graphql_query["variables"]["pageToken"] = pr_meta["tableDiffs"][0]["rowDiffs"]["nextPageToken"]
 
             if simple:
-                # TODO: Implement Simple Mode
-                yield pr_meta
+                pr_meta = result["data"]["pullCommitDiff"]
+
+                desired_table_index: int = -1
+                for table in pr_meta["tableDiffs"]:
+                    # We Favor New Table Over Old Table As That's New Data
+                    current_table_name: str = ""
+                    if isinstance(table["newTable"], dict) and "tableName" in table["newTable"]:
+                        current_table_name: str = table["newTable"]["tableName"]
+                    elif isinstance(table["oldTable"], dict) and "tableName" in table["oldTable"]:
+                        current_table_name: str = table["oldTable"]["tableName"]
+
+                    if current_table_name.strip().lower() == table_name.strip().lower():
+                        desired_table_index: int = pr_meta["tableDiffs"].index(table)
+                        break
+
+                # If no such table is found, then we just return
+                if desired_table_index == -1:
+                    return
+
+                # Check For Next Page Token If Any, Otherwise Set The Loop To Close
+                # We only return one table at a time as it's so much simpler than handling a lot of tables with their own paginations tokens at once
+                if "nextPageToken" not in pr_meta["tableDiffs"][desired_table_index]["rowDiffs"] or pr_meta["tableDiffs"][desired_table_index]["rowDiffs"]["nextPageToken"].strip() == "":
+                    has_next_page: bool = False
+                else:
+                    graphql_query["variables"]["pageToken"] = pr_meta["tableDiffs"][desired_table_index]["rowDiffs"]["nextPageToken"]
+
+                table_meta = pr_meta["tableDiffs"][desired_table_index]
+                table_columns = table_meta["rowDiffColumns"]
+                table_rows = table_meta["rowDiffs"]["list"]
+
+                # Turn Column List Into Simple List
+                columns_list = []
+                for column in table_columns:
+                    columns_list.append(column["name"])
+
+                for row in table_rows:
+                    added_row = row["added"]["columnValues"] if isinstance(row["added"], dict) and "columnValues" in row["added"] else None
+                    deleted_row = row["deleted"]["columnValues"] if isinstance(row["deleted"], dict) and "columnValues" in row["deleted"] else None
+
+                    added_row_simple = {}
+                    if added_row is not None:
+                        for column in added_row:
+                            name = columns_list[added_row.index(column)]
+                            value = column["displayValue"]
+
+                            added_row_simple[name] = value
+
+                    deleted_row_simple = {}
+                    if deleted_row is not None:
+                        for column in deleted_row:
+                            name = columns_list[deleted_row.index(column)]
+                            value = column["displayValue"]
+
+                            deleted_row_simple[name] = value
+
+                    # Check If Dictionaries are Empty To Set To None
+                    if not added_row_simple:
+                        added_row_simple = None
+
+                    if not deleted_row_simple:
+                        deleted_row_simple = None
+
+                    simple_result: dict = {
+                        "added": added_row_simple,
+                        "deleted": deleted_row_simple
+                    }
+
+                    yield simple_result
             else:
-                yield result, status_code
+                # The reason for this not being implemented is because every table the repo has can have a separate pagination token.
+                # I have yet to determine which tokens to use to get all the data in as few requests as possible.
+                # I suspect I can either go with the table with the longest diff or just loop through until I run out of tokens.
+                # However, I want to setup tests before I implement multi-table pagination.
+                raise NotImplementedException("Currently, only simple mode is implemented for this function, if you would like to parse the api response from GraphQL directly, please use the function, perform_api_operation, to perform the operation.")
+                # yield result, status_code
 
 
 if __name__ == "__main__":
@@ -664,6 +742,8 @@ if __name__ == "__main__":
         print(f"NoAuthException: {e}")
     except NeedAtLeastOneOptionalArgumentException as e:
         print(f"NeedAtLeastOneOptionalArgumentException: {e}")
+    except NotImplementedException as e:
+        print(f"NotImplementedException: {e}")
     except APIServerException as e:
         message, result, status_code, response = e.args
 
