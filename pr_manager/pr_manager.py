@@ -618,49 +618,70 @@ class PRManager:
           "query": "query PullDiffForTableList($ownerName: String!, $repoName: String!, $pullId: String!) {  pullCommitDiff(repoName: $repoName, ownerName: $ownerName, pullId: $pullId) {    ...CommitDiffForTableList    __typename  }}fragment CommitDiffForTableList on CommitDiff {  _id  toOwnerName  toRepoName  toCommitId  fromOwnerName  fromRepoName  fromCommitId  tableDiffs {    ...TableDiffForTableList    __typename  }  __typename}fragment TableDiffForTableList on TableDiff {  oldTable {    ...TableForDiffTableList    __typename  }  newTable {    ...TableForDiffTableList    __typename  }  numChangedSchemas  rowDiffColumns {    ...ColumnForDiffTableList    __typename  }  rowDiffs {    ...RowDiffListForTableList    __typename  }  schemaDiff {    ...SchemaDiffForTableList    __typename  }  schemaPatch  __typename}fragment TableForDiffTableList on Table {  tableName  columns {    ...ColumnForDiffTableList    __typename  }  __typename}fragment ColumnForDiffTableList on Column {  name  isPrimaryKey  type  maxLength  constraints {    notNull    __typename  }  __typename}fragment RowDiffListForTableList on RowDiffList {  list {    ...RowDiffForTableList    __typename  }  nextPageToken  filterByRowTypeRequest {    pageToken    filterByRowType    __typename  }  __typename}fragment RowDiffForTableList on RowDiff {  added {    ...RowForTableList    __typename  }  deleted {    ...RowForTableList    __typename  }  __typename}fragment RowForTableList on Row {  columnValues {    ...ColumnValueForTableList    __typename  }  __typename}fragment ColumnValueForTableList on ColumnValue {  displayValue  __typename}fragment SchemaDiffForTableList on TextDiff {  leftLines {    ...SchemaDiffLineForTableList    __typename  }  rightLines {    ...SchemaDiffLineForTableList    __typename  }  __typename}fragment SchemaDiffLineForTableList on Line {  content  lineNumber  type  __typename}"
         }
 
+        # Requiring A Second Query With A Different Layout Greatly Increases Complexity Of The Parsing Script
+        # This query is for retrieving pages after the initial page
+        pagination_graphql_query: dict = {
+          "operationName": "NextPageRowDiffs",
+          "variables": {},
+          "query": "query NextPageRowDiffs($pageToken: String!, $filterByRowType: DiffRowType) {  rowDiffs(pageToken: $pageToken, filterByRowType: $filterByRowType) {    ...RowDiffListForTableList    __typename  }}fragment RowDiffListForTableList on RowDiffList {  list {    ...RowDiffForTableList    __typename  }  nextPageToken  filterByRowTypeRequest {    pageToken    filterByRowType    __typename  }  __typename}fragment RowDiffForTableList on RowDiff {  added {    ...RowForTableList    __typename  }  deleted {    ...RowForTableList    __typename  }  __typename}fragment RowForTableList on Row {  columnValues {    ...ColumnValueForTableList    __typename  }  __typename}fragment ColumnValueForTableList on ColumnValue {  displayValue  __typename}"
+        }
+
         # Allows the Caller To Start From A Specific Page
+        first_page: bool = True
         if page_token is not None:
-            graphql_query["variables"]["pageToken"] = page_token
+            pagination_graphql_query["variables"]["pageToken"] = page_token
+            first_page: bool = False
 
-        has_next_page: bool = True
-        while has_next_page:
-            result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+        result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
 
-            if simple:
-                pr_meta = result["data"]["pullCommitDiff"]
+        if simple:
+            pr_meta = result["data"]["pullCommitDiff"]
 
-                desired_table_index: int = -1
-                for table in pr_meta["tableDiffs"]:
-                    # We Favor New Table Over Old Table As That's New Data
-                    current_table_name: str = ""
-                    if isinstance(table["newTable"], dict) and "tableName" in table["newTable"]:
-                        current_table_name: str = table["newTable"]["tableName"]
-                    elif isinstance(table["oldTable"], dict) and "tableName" in table["oldTable"]:
-                        current_table_name: str = table["oldTable"]["tableName"]
+            desired_table_index: int = -1
+            for table in pr_meta["tableDiffs"]:
+                # We Favor New Table Over Old Table As That's New Data
+                current_table_name: str = ""
+                if isinstance(table["newTable"], dict) and "tableName" in table["newTable"]:
+                    current_table_name: str = table["newTable"]["tableName"]
+                elif isinstance(table["oldTable"], dict) and "tableName" in table["oldTable"]:
+                    current_table_name: str = table["oldTable"]["tableName"]
 
-                    if current_table_name.strip().lower() == table_name.strip().lower():
-                        desired_table_index: int = pr_meta["tableDiffs"].index(table)
-                        break
+                if current_table_name.strip().lower() == table_name.strip().lower():
+                    desired_table_index: int = pr_meta["tableDiffs"].index(table)
+                    break
 
-                # If no such table is found, then we just return
-                if desired_table_index == -1:
-                    return
+            # If no such table is found, then we just return
+            if desired_table_index == -1:
+                return
 
-                # Check For Next Page Token If Any, Otherwise Set The Loop To Close
-                # We only return one table at a time as it's so much simpler than handling a lot of tables with their own paginations tokens at once
-                if "nextPageToken" not in pr_meta["tableDiffs"][desired_table_index]["rowDiffs"] or pr_meta["tableDiffs"][desired_table_index]["rowDiffs"]["nextPageToken"].strip() == "":
-                    has_next_page: bool = False
+            table_meta = pr_meta["tableDiffs"][desired_table_index]
+            table_columns = table_meta["rowDiffColumns"]
+            table_rows = table_meta["rowDiffs"]["list"]
+
+            # Turn Column List Into Simple List
+            columns_list = []
+            for column in table_columns:
+                columns_list.append(column["name"])
+
+            has_next_page: bool = True
+            while has_next_page:
+                if first_page:
+                    first_page: bool = False
+
+                    # Check For Next Page Token If Any, Otherwise Set The Loop To Close
+                    # We only return one table at a time as it's so much simpler than handling a lot of tables with their own paginations tokens at once
+                    if "nextPageToken" not in pr_meta["tableDiffs"][desired_table_index]["rowDiffs"] or pr_meta["tableDiffs"][desired_table_index]["rowDiffs"]["nextPageToken"].strip() == "":
+                        has_next_page: bool = False
+                    else:
+                        pagination_graphql_query["variables"]["pageToken"] = pr_meta["tableDiffs"][desired_table_index]["rowDiffs"]["nextPageToken"]
                 else:
-                    graphql_query["variables"]["pageToken"] = pr_meta["tableDiffs"][desired_table_index]["rowDiffs"]["nextPageToken"]
+                    result, status_code, _ = self.perform_api_operation(graphql_query=pagination_graphql_query)
+                    table_rows = result["data"]["rowDiffs"]["list"]
 
-                table_meta = pr_meta["tableDiffs"][desired_table_index]
-                table_columns = table_meta["rowDiffColumns"]
-                table_rows = table_meta["rowDiffs"]["list"]
-
-                # Turn Column List Into Simple List
-                columns_list = []
-                for column in table_columns:
-                    columns_list.append(column["name"])
+                    if "nextPageToken" not in result["data"]["rowDiffs"] or result["data"]["rowDiffs"]["nextPageToken"].strip() == "":
+                        has_next_page: bool = False
+                    else:
+                        pagination_graphql_query["variables"]["pageToken"] = result["data"]["rowDiffs"]["nextPageToken"]
 
                 for row in table_rows:
                     added_row = row["added"]["columnValues"] if isinstance(row["added"], dict) and "columnValues" in row["added"] else None
@@ -707,13 +728,15 @@ class PRManager:
                     }
 
                     yield simple_result
-            else:
-                # The reason for this not being implemented is because every table the repo has can have a separate pagination token.
-                # I have yet to determine which tokens to use to get all the data in as few requests as possible.
-                # I suspect I can either go with the table with the longest diff or just loop through until I run out of tokens.
-                # However, I want to setup tests before I implement multi-table pagination.
-                raise NotImplementedException("Currently, only simple mode is implemented for this function, if you would like to parse the api response from GraphQL directly, please use the function, perform_api_operation, to perform the operation.")
-                # yield result, status_code
+        else:
+            # The reason for this not being implemented is because every table the repo has can have a separate pagination token.
+            # I have yet to determine which tokens to use to get all the data in as few requests as possible.
+            # I suspect I can either go with the table with the longest diff or just loop through until I run out of tokens.
+            # However, I want to setup tests before I implement multi-table pagination.
+            # TODO: Rethink solution as I've come to realize we have a secondary query we need to run for pagination.
+            # I'll most likely split this up into subfunctions given how complex this has become.
+            raise NotImplementedException("Currently, only simple mode is implemented for this function, if you would like to parse the api response from GraphQL directly, please use the function, perform_api_operation, to perform the operation.")
+            # yield result, status_code
 
 
 if __name__ == "__main__":
