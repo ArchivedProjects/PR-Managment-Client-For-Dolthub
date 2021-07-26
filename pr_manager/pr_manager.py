@@ -316,6 +316,30 @@ class PRManager:
         result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
         return result, status_code
 
+    def delete_branch(self, repo_owner: str, repo_name: str, branch_name: str):
+        """
+            Delete a branch.
+
+            @param repo_owner: The owner of the repo with the branch you want to delete.
+            @param repo_name: The name of the repo with the branch you want to delete.
+            @param branch_name: The name of the branch you want to delete.
+
+            @return: A tuple of the HTTP Status Code and the response body read as JSON. The response body is first and then the status code comes second.
+        """
+
+        graphql_query: dict = {
+          "operationName": "DeleteBranch",
+          "variables": {
+            "ownerName": repo_owner,
+            "repoName": repo_name,
+            "branchName": branch_name
+          },
+          "query": "mutation DeleteBranch($repoName: String!, $ownerName: String!, $branchName: String!) {  deleteBranch(    repoName: $repoName    ownerName: $ownerName    branchName: $branchName  )}"
+        }
+
+        result, status_code, _ = self.perform_api_operation(graphql_query=graphql_query)
+        return result, status_code
+
     def create_pr(self, source_repo_owner: str, source_repo_name: str, source_branch: str,
                   destination_repo_owner: str, destination_repo_name: str, destination_branch: str,
                   pr_title: str = "", pr_message: str = "", simple: bool = True):
@@ -808,6 +832,9 @@ if __name__ == "__main__":
         # diff_summary = manager.pull_pr_diff_summary(source_repo_owner="alexis-evelyn", source_repo_name="test-forking", source_commit_id="ufch4ceqerri5i15e96lst37d146448d", destination_repo_owner="alexis-evelyn", destination_repo_name="test-forking", destination_commit_id="t9anfb30b6fo8g4jnp5p6lmiq8fjemd0")
         # print(f"{diff_summary['rows']['count']} Row(s) Total - {diff_summary['rows']['modified']} Row(s) Modified - {diff_summary['rows']['unmodified']} Row(s) Unmodified - {diff_summary['rows']['added']} Row(s) Added - {diff_summary['rows']['deleted']} Row(s) Deleted")
         # print(f"{diff_summary['cells']['count']} Cell(s) Total - {diff_summary['cells']['modified']} Cell(s) Modified - {diff_summary['cells']['unmodified']} Cell(s) Unmodified")
+
+        # Delete branch
+        # results, status_code = manager.delete_branch(repo_owner="alexis-evelyn", repo_name="test-forking", branch_name="test_pr_script_12")
 
         # Lookup PR Demo
         lookup_pr_results = manager.lookup_pr(repo_owner="dolthub", repo_name="logo-2k-extended", pr_id=23)
