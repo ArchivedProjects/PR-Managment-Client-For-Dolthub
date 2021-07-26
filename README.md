@@ -43,7 +43,12 @@ Ideas which you may want to consider include but are not limited to, submitting 
 
 ```sh
 # Currently this package is only on Github as I have not figured out a name for the package yet.
+
+# SSH Version
 pip3 install git+ssh://git@github.com/alexis-evelyn/PR-Managment-Client-For-Dolthub.git
+
+# HTTPS Version
+pip3 install git+https://github.com/alexis-evelyn/PR-Managment-Client-For-Dolthub.git
 ```
 
 <!-- TODO:
