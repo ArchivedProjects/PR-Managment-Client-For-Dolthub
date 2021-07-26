@@ -43,6 +43,8 @@ Ideas which you may want to consider include but are not limited to, submitting 
     * Add in ability to view schema changes.
     * Add in ability to lookup tables in a PR.
     * Figure out what to do with diff selector.
+    * Setup repo so people can install with Pip.
+    * Also make sure Pip knows to install requests.
 -->
 
 [doltpy]: https://pypi.org/project/doltpy
