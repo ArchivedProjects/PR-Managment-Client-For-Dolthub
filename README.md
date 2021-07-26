@@ -39,5 +39,10 @@ Ideas which you may want to consider include but are not limited to, submitting 
 
 \* Viewing repo data such as the diff between branches from PRs is a planned feature. I have not currently implemented it yet as it's 2 AM for me and have called it a night for writing actual code.
 
+<!-- TODO:
+    * Add in ability to view schema changes.
+    * Add in ability to lookup tables in a PR.
+-->
+
 [doltpy]: https://pypi.org/project/doltpy
 [pr_manager]: pr_manager/pr_manager.py

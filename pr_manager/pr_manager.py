@@ -585,6 +585,10 @@ class PRManager:
             So, the variable, simple, must be True else a NotImplementedException will be thrown.
             Also, table_name is currently required as only simple mode can be used at the moment.
 
+            *Due to the fact that I have yet to implement viewing schema changes,
+             the output cannot be guaranteed to be backwards compatible in the future yet.
+            So, take care to check output changes whenever updating until the message is removed.*
+
             @param repo_owner: The owner of the repo where the PR resides. Not the submitter of the PR.
             @param repo_name: The name of the repo where the PR resides. Not the name of the fork that the PR came from.
             @param pr_id: The id of the PR as seen in the PR list of the repo.
@@ -757,6 +761,30 @@ if __name__ == "__main__":
 
         # Commenting On PR Demo
         # manager.comment_on_pr(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=5, message="This is a test comment 2")
+
+        # Looking Up PR Diff - If you really want some fun, try creating a Pandas Dataframe by importing the `added` and `deleted` dictionaries as records.
+        # for row in manager.pull_pr_diff(repo_owner="alexis-evelyn", repo_name="test-forking", pr_id=10, table_name="pr_diff_test"):
+        #     added = row["added"]
+        #     deleted = row["deleted"]
+        #
+        #     added_list = []
+        #     if added is not None:
+        #         for column in added:
+        #             added_list.append(f"{column}: {added[column]}")
+        #
+        #     deleted_list = []
+        #     if deleted is not None:
+        #         for column in deleted:
+        #             deleted_list.append(f"{column}: {deleted[column]}")
+        #
+        #     added_str = ', '.join(added_list) if added is not None else None
+        #     deleted_str = ', '.join(deleted_list) if deleted is not None else None
+        #     print(f"Added: `{added_str}` | Deleted: `{deleted_str}`")
+
+        # Lookup PR Diff Summary
+        # diff_summary = manager.pull_pr_diff_summary(source_repo_owner="alexis-evelyn", source_repo_name="test-forking", source_commit_id="ufch4ceqerri5i15e96lst37d146448d", destination_repo_owner="alexis-evelyn", destination_repo_name="test-forking", destination_commit_id="t9anfb30b6fo8g4jnp5p6lmiq8fjemd0")
+        # print(f"{diff_summary['rows']['count']} Row(s) Total - {diff_summary['rows']['modified']} Row(s) Modified - {diff_summary['rows']['unmodified']} Row(s) Unmodified - {diff_summary['rows']['added']} Row(s) Added - {diff_summary['rows']['deleted']} Row(s) Deleted")
+        # print(f"{diff_summary['cells']['count']} Cell(s) Total - {diff_summary['cells']['modified']} Cell(s) Modified - {diff_summary['cells']['unmodified']} Cell(s) Unmodified")
 
         # Lookup PR Demo
         lookup_pr_results = manager.lookup_pr(repo_owner="dolthub", repo_name="logo-2k-extended", pr_id=23)
