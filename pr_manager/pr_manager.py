@@ -1,4 +1,5 @@
 from datetime import datetime
+from requests.exceptions import Timeout
 
 import requests
 import json
@@ -38,18 +39,20 @@ class NotImplementedException(Exception):
 
 
 class PRManager:
-    def __init__(self, token: str = None, token_file: str = None, user_agent: str = "Alexis' Private API Client For Bounties"):
+    def __init__(self, token: str = None, token_file: str = None, user_agent: str = "Alexis' Private API Client For Bounties", timeout: float = 30.0):
         """
             Required to setup the private api client.
 
             @param token: To provide the dolthubToken cookie value directly.
             @param token_file: To provide the file with the dolthubToken cookie value.
             @param user_agent: To change the user agent.
+            @param timeout: To specify how long a request should take before it fails.
             @return: Nothing
         """
 
         self.user_agent = user_agent
         self.graphql_url = "https://www.dolthub.com/graphql"
+        self.timeout = timeout
 
         self.allowed_status_codes = [200, 301, 302, 418]  # 418 is the Teapot Exception Code
         self.allowed_pr_states = ["Open", "Closed", "Merged"]  # Currently not in use
@@ -78,7 +81,10 @@ class PRManager:
             "Cookie": f"dolthubToken={self.token}"
         }
 
-        response = requests.post(url=self.graphql_url, json=graphql_query, headers=headers)
+        try:
+            response = requests.post(url=self.graphql_url, json=graphql_query, headers=headers, timeout=self.timeout)
+        except Timeout:
+            raise APIServerException("GraphQL took too long to respond!", None, None, None)
 
         # Dolthub Cannot Contact AWS At The Moment If This Is Triggered
         if response.text.strip() == "upstream request timeout":
